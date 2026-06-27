@@ -1,39 +1,35 @@
 import httpx
-from fastapi import Request
-from fastapi.responses import Response
+from fastapi import Request, Response
 
-from discovery import streamablehttp_client, ClientSession
+from discovery import streamable_http_client, ClientSession
 
-HOP_HEADERS = {
+MCP_HEADERS = {
     "host",
     "content-length",
     "connection",
     "transfer-encoding",
 }
 
-
-async def forward_tool_call(request: Request, server: str):
+async def forward_mcp_request(mcp_server: str, request: Request):
 
     body = await request.body()
 
     headers = {
         k: v
         for k, v in request.headers.items()
-        if k.lower() not in HOP_HEADERS and k.lower() != "mcp-session-id"
+        if k.lower() not in MCP_HEADERS and k.lower() != "mcp-session-id"
     }
 
-    async with streamablehttp_client(server) as (read, write, get_session_id):
+    async with streamable_http_client(mcp_server) as (read, write, mcp_session):
         async with ClientSession(read, write) as session:
 
-            # 🔥 ALWAYS re-init session (no reuse)
             await session.initialize()
 
-            # inject fresh session
-            headers["Mcp-Session-Id"] = get_session_id()
+            headers["Mcp-Session-Id"] = mcp_session()
 
             async with httpx.AsyncClient(timeout=None) as client:
                 resp = await client.post(
-                    server,
+                    mcp_server,
                     content=body,
                     headers=headers,
                 )
