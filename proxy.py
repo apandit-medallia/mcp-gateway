@@ -1,10 +1,10 @@
 import httpx
-
 from fastapi import Request
 from fastapi.responses import Response
 
+from discovery import streamablehttp_client, ClientSession
 
-HOP_BY_HOP_HEADERS = {
+HOP_HEADERS = {
     "host",
     "content-length",
     "connection",
@@ -12,44 +12,34 @@ HOP_BY_HOP_HEADERS = {
 }
 
 
-async def forward(request: Request, server: str):
+async def forward_tool_call(request: Request, server: str):
 
     body = await request.body()
 
-    headers = {}
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in HOP_HEADERS and k.lower() != "mcp-session-id"
+    }
 
-    #
-    # Forward ALL incoming headers
-    #
-    for k, v in request.headers.items():
+    async with streamablehttp_client(server) as (read, write, get_session_id):
+        async with ClientSession(read, write) as session:
 
-        if k.lower() not in HOP_BY_HOP_HEADERS:
-            headers[k] = v
+            # 🔥 ALWAYS re-init session (no reuse)
+            await session.initialize()
 
-    async with httpx.AsyncClient(timeout=None) as client:
+            # inject fresh session
+            headers["Mcp-Session-Id"] = get_session_id()
 
-        response = await client.post(
-            server,
-            content=body,
-            headers=headers,
-        )
-
-    #
-    # Copy ALL response headers back
-    #
-    out_headers = {}
-
-    for k, v in response.headers.items():
-
-        if k.lower() not in HOP_BY_HOP_HEADERS:
-            out_headers[k] = v
+            async with httpx.AsyncClient(timeout=None) as client:
+                resp = await client.post(
+                    server,
+                    content=body,
+                    headers=headers,
+                )
 
     return Response(
-        content=response.content,
-        status_code=response.status_code,
-        headers=out_headers,
-        media_type=response.headers.get(
-            "content-type",
-            "application/json",
-        ),
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
     )
