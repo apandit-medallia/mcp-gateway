@@ -1,7 +1,7 @@
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from config import TOOL_ROUTES, TOOLS_LIST
+from config import TOOL_ROUTES, TOOL_LIST
 
 
 async def discover(mcp_server: str):
@@ -17,7 +17,7 @@ async def discover(mcp_server: str):
 
             for tool in result.tools:
                 TOOL_ROUTES[tool.name] = mcp_server
-                TOOLS_LIST.append({
+                TOOL_LIST.append({
                     "name": tool.name,
                     "description": tool.description,
                     "inputSchema": tool.inputSchema,

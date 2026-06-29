@@ -1,7 +1,29 @@
 from fastapi import Request, Response
 
-from config import TOOL_ROUTES, TOOLS_LIST
+from config import RATE_LIMITER, TOOL_ROUTES, TOOL_LIST
 from proxy import forward_mcp_request
+
+
+async def handle_authentication_error(body: dict):
+    return {
+        "jsonrpc": "2.0",
+        "id": body.get("id"),
+        "error": {
+            "code": 401,
+            "message": "Authentication Error",
+        },
+    }
+
+
+async def handle_authorization_error(body: dict):
+    return {
+        "jsonrpc": "2.0",
+        "id": body.get("id"),
+        "error": {
+            "code": 403,
+            "message": "Authorization Error",
+        },
+    }
 
 
 async def handle_initialize(body: dict):
@@ -32,7 +54,7 @@ async def handle_tools_list(body: dict):
         "jsonrpc": "2.0",
         "id": body.get("id"),
         "result": {
-            "tools": TOOLS_LIST
+            "tools": TOOL_LIST
         },
     }
 
@@ -50,6 +72,31 @@ async def handle_tool_call(request: Request):
         )
 
     return await forward_mcp_request(mcp_server, request)
+
+
+async def handle_quota_exceeded(body: dict):
+    return {
+        "jsonrpc": "2.0",
+        "id": body.get("id"),
+        "error": {
+            "code": -32001,
+            "message": "Tools call quota exceeded."
+        }
+    }
+
+
+async def handle_rate_limit_exceeded(body: dict):
+    return {
+        "jsonrpc": "2.0",
+        "id": body.get("id"),
+        "error": {
+            "code": 429,
+            "message": "Rate limit exceeded",
+            "data": {
+                "retry_after_seconds": round(RATE_LIMITER.reset_in, 2)
+            }
+        }
+    }
 
 
 async def handle_unsupported_method():
